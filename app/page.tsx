@@ -1,103 +1,137 @@
-import Image from "next/image";
+"use client";
+import { useState } from "react";
+import axios from "axios";
+import MeetingSummaries from "@/components/MeetingSummaries";
+import EmailSummary from "@/components/EmailSummary";
+import { useToast } from "@/components/ToastProvider";
+
+// Helper function to format JSON summary as readable text
+function formatSummaryAsText(summaryContent: any): string {
+  if (summaryContent.raw) {
+    return summaryContent.raw;
+  }
+  
+  let text = "";
+  if (summaryContent.highlights && Array.isArray(summaryContent.highlights)) {
+    text += "Key Highlights:\n" + summaryContent.highlights.map((h: string) => `• ${h}`).join("\n") + "\n\n";
+  }
+  if (summaryContent.decisions && Array.isArray(summaryContent.decisions)) {
+    text += "Decisions Made:\n" + summaryContent.decisions.map((d: string) => `• ${d}`).join("\n") + "\n\n";
+  }
+  if (summaryContent.actions && Array.isArray(summaryContent.actions)) {
+    text += "Action Items:\n" + summaryContent.actions.map((a: string) => `• ${a}`).join("\n") + "\n\n";
+  }
+  if (summaryContent.notes && Array.isArray(summaryContent.notes)) {
+    text += "Notes:\n" + summaryContent.notes.map((n: string) => `• ${n}`).join("\n") + "\n\n";
+  }
+  
+  return text.trim() || "Summary generated successfully.";
+}
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const { toast } = useToast();
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState("");
+  const [prompt, setPrompt] = useState(""); // Custom instruction/prompt
+  const [generatedSummary, setGeneratedSummary] = useState<string>(""); // AI-generated summary
+  const [summaryHtml, setSummaryHtml] = useState<string>(""); // HTML formatted summary for email
+  const [loading, setLoading] = useState(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const handleUploadAndSummarize = async () => {
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("title", title);
+    formData.append("prompt", prompt); // send custom instruction
+
+    const token = localStorage.getItem("token");
+    setLoading(true);
+
+    try {
+      const res = await axios.post("/api/upload/upload-and-summarize", formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      // The AI-generated summary from the backend
+      const meeting = res.data.meeting;
+      const summaryContent = meeting?.summary?.content;
+      
+      // Set both text and HTML versions
+      if (summaryContent) {
+        // Create a readable text version from JSON
+        const textSummary = formatSummaryAsText(summaryContent);
+        setGeneratedSummary(textSummary);
+      }
+      
+      // Set HTML version for email
+      setSummaryHtml(res.data.summaryHtml || "");
+      console.log("Upload and summarization successful:", res.data);
+
+      // Notify and refresh meeting list
+      toast("Meeting summary generated", "success");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("meetings:refresh"));
+      }
+      // Optionally clear form inputs
+      setFile(null);
+    } catch (error: any) {
+      console.error("Upload failed:", error.response?.data || error.message);
+      toast("Failed to generate summary", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="p-6 max-w-3xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">AI Meeting Summarizer</h1>
+
+      <input
+        type="text"
+        placeholder="Meeting title"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        className="border p-2 rounded block mb-2 w-full"
+      />
+
+      <textarea
+        placeholder="Enter custom instruction / prompt (e.g., summarize for executives)"
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        className="border p-2 rounded block mb-2 w-full h-20"
+      />
+
+      <input
+        type="file"
+        onChange={(e) => setFile(e.target.files?.[0] || null)}
+        className="block mb-2"
+      />
+
+      <button
+        onClick={handleUploadAndSummarize}
+        className="bg-blue-500 text-white px-4 py-2 rounded mb-4"
+        disabled={loading}
+      >
+        {loading ? "Generating Summary..." : "Generate Summary"}
+      </button>
+
+      {generatedSummary && (
+        <div className="border p-4 rounded bg-gray-50">
+          <h2 className="font-semibold mb-2">Generated Summary (Editable)</h2>
+          <textarea
+            value={generatedSummary}
+            onChange={(e) => setGeneratedSummary(e.target.value)}
+            className="w-full h-64 border p-2 rounded"
+          />
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      )}
+      <EmailSummary summary={generatedSummary} summaryHtml={summaryHtml} />
+
+      <MeetingSummaries />
     </div>
   );
 }

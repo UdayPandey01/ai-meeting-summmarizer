@@ -28,9 +28,12 @@ app.post('/', async (c) => {
     });
 
     return c.json({ success: true });
-  } catch (err: any) {
-    console.error('Email sending error:', err);
-    return c.json({ error: 'Failed to send email', details: err.message }, 500);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Email sending error:', err);
+    }
+    return c.json({ error: 'Failed to send email', details: message }, 500);
   }
 });
 

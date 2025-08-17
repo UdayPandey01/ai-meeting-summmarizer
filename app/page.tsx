@@ -5,8 +5,17 @@ import MeetingSummaries from "@/components/MeetingSummaries";
 import EmailSummary from "@/components/EmailSummary";
 import { useToast } from "@/components/ToastProvider";
 
+type ActionItem = string | Record<string, string>;
+type SummaryJSON = {
+  raw?: string;
+  highlights?: string[];
+  decisions?: string[];
+  actions?: ActionItem[];
+  notes?: string[];
+};
+
 // Helper function to format JSON summary as readable text
-function formatSummaryAsText(summaryContent: any): string {
+function formatSummaryAsText(summaryContent: SummaryJSON): string {
   if (summaryContent.raw) {
     return summaryContent.raw;
   }
@@ -19,7 +28,7 @@ function formatSummaryAsText(summaryContent: any): string {
     text += "Decisions Made:\n" + summaryContent.decisions.map((d: string) => `• ${d}`).join("\n") + "\n\n";
   }
   if (summaryContent.actions && Array.isArray(summaryContent.actions)) {
-    text += "Action Items:\n" + summaryContent.actions.map((a: string) => `• ${a}`).join("\n") + "\n\n";
+    text += "Action Items:\n" + summaryContent.actions.map((a: ActionItem) => `• ${typeof a === "string" ? a : Object.entries(a).map(([k,v]) => `${k}: ${v}`).join(", ")}`).join("\n") + "\n\n";
   }
   if (summaryContent.notes && Array.isArray(summaryContent.notes)) {
     text += "Notes:\n" + summaryContent.notes.map((n: string) => `• ${n}`).join("\n") + "\n\n";
@@ -78,8 +87,14 @@ export default function Home() {
       }
       // Optionally clear form inputs
       setFile(null);
-    } catch (error: any) {
-      console.error("Upload failed:", error.response?.data || error.message);
+    } catch (error: unknown) {
+      if (process.env.NODE_ENV !== "production") {
+        if (axios.isAxiosError(error)) {
+          console.error("Upload failed:", error.response?.data || error.message);
+        } else {
+          console.error("Upload failed:", error instanceof Error ? error.message : "Unknown error");
+        }
+      }
       toast("Failed to generate summary", "error");
     } finally {
       setLoading(false);

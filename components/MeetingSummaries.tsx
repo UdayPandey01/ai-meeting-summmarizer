@@ -3,8 +3,17 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 
+type ActionItem = string | Record<string, string>;
+type SummaryJSON = {
+  raw?: string;
+  highlights?: string[];
+  decisions?: string[];
+  actions?: ActionItem[];
+  notes?: string[];
+};
+
 interface Summary {
-  content: any;
+  content: SummaryJSON;
   status: string;
 }
 
@@ -118,7 +127,7 @@ export default function MeetingSummaries() {
                   </div>
                 ) : (
                   ["highlights", "decisions", "actions", "notes"].map((key) => {
-                    const content = meeting.summary?.content?.[key as keyof typeof meeting.summary.content];
+                    const content = meeting.summary?.content?.[key as keyof SummaryJSON];
                     if (
                       !content ||
                       (Array.isArray(content) && content.length === 0)
@@ -134,7 +143,7 @@ export default function MeetingSummaries() {
                         </h3>
                         {Array.isArray(content) ? (
                           <ul className="list-disc ml-5 space-y-1 text-gray-800">
-                            {content.map((item: any, idx: number) => (
+                            {content.map((item: ActionItem, idx: number) => (
                               <li key={idx}>
                                 {typeof item === "string"
                                   ? item

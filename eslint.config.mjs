@@ -9,8 +9,17 @@ const compat = new FlatCompat({
   baseDirectory: __dirname,
 });
 
-const eslintConfig = [
+export default [
+  // Ignore generated code and build outputs
+  {
+    ignores: [
+      "lib/generated/**",
+      "**/generated/**",
+      ".next/**",
+      "node_modules/**",
+      "dist/**",
+      "build/**",
+    ],
+  },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
 ];
-
-export default eslintConfig;
